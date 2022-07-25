@@ -9,6 +9,7 @@ import java.nio.FloatBuffer;
 public class Triangle {
 
     private FloatBuffer vertexBuffer;
+    private FloatBuffer vertexColorBuffer;
     private final int mProgram;
 
     // number of coordinates per vertex in this array
@@ -18,7 +19,12 @@ public class Triangle {
             -0.5f, -0.311004243f, 0.0f, // bottom left
              0.5f, -0.311004243f, 0.0f  // bottom right
     };
-
+    static final int COLORS_PER_VERTEX = 3;
+    static float triangleColors[] = {   // in counterclockwise order:
+            1.0f,  0.0f, 0.0f, // top
+            0.0f,  1.0f, 0.0f, // bottom left
+            0.0f,  0.0f, 1.0f  // bottom right
+    };
     // Set color with red, green, blue and alpha (opacity) values
     float color[] = { 0.63671875f, 0.76953125f, 0.22265625f, 1.0f };
 
@@ -37,6 +43,18 @@ public class Triangle {
         // set the buffer to read the first coordinate
         vertexBuffer.position(0);
 
+        ByteBuffer bbColor = ByteBuffer.allocateDirect(
+                // (number of coordinate values * 4 bytes per float)
+                triangleColors.length * 4);
+        // use the device hardware's native byte order
+        bbColor.order(ByteOrder.nativeOrder());
+
+        // create a floating point buffer from the ByteBuffer
+        vertexColorBuffer = bbColor.asFloatBuffer();
+        // add the coordinates to the FloatBuffer
+        vertexColorBuffer.put(triangleColors);
+        // set the buffer to read the first coordinate
+        vertexColorBuffer.position(0);
         int vertexShader = MyGLRenderer.loadShader(GLES20.GL_VERTEX_SHADER,
                 vertexShaderCode);
         int fragmentShader = MyGLRenderer.loadShader(GLES20.GL_FRAGMENT_SHADER,
@@ -59,11 +77,14 @@ public class Triangle {
             // the coordinates of the objects that use this vertex shader
             "uniform mat4 uMVPMatrix;" +
                     "attribute vec4 vPosition;" +
+                    "attribute vec4 aColor;" +
+                    "varying vec4 v_Color;" +
                     "void main() {" +
                     // the matrix must be included as a modifier of gl_Position
                     // Note that the uMVPMatrix factor *must be first* in order
                     // for the matrix multiplication product to be correct.
                     "  gl_Position = uMVPMatrix * vPosition;" +
+                    "  v_Color = aColor;" +
                     "}";
 
     // Use to access and set the view transformation
@@ -72,11 +93,13 @@ public class Triangle {
     private final String fragmentShaderCode =
             "precision mediump float;" +
                     "uniform vec4 vColor;" +
+                    "varying vec4 v_Color;" +
                     "void main() {" +
-                    "  gl_FragColor = vColor;" +
+                    "  gl_FragColor = 0.5*(v_Color+vColor);" +
                     "}";
 
     private int positionHandle;
+    private int vertexColorHandle;
     private int colorHandle;
 
     private final int vertexCount = triangleCoords.length / COORDS_PER_VERTEX;
@@ -88,14 +111,19 @@ public class Triangle {
 
         // get handle to vertex shader's vPosition member
         positionHandle = GLES20.glGetAttribLocation(mProgram, "vPosition");
+        vertexColorHandle = GLES20.glGetAttribLocation(mProgram, "aColor");
 
         // Enable a handle to the triangle vertices
         GLES20.glEnableVertexAttribArray(positionHandle);
+        GLES20.glEnableVertexAttribArray(vertexColorHandle);
 
         // Prepare the triangle coordinate data
         GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX,
                 GLES20.GL_FLOAT, false,
                 vertexStride, vertexBuffer);
+        GLES20.glVertexAttribPointer(vertexColorHandle, COORDS_PER_VERTEX,
+                GLES20.GL_FLOAT, false,
+                vertexStride, vertexColorBuffer);
 
         // get handle to fragment shader's vColor member
         colorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
